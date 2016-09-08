@@ -49,7 +49,7 @@ static const auto PREFIX = "[vive-libre] ";
 
 void vl_print(std::string s) {
     std::cout << PREFIX << s << std::endl;
-};
+}
 
 class TrackerDevice {
 

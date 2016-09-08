@@ -55,9 +55,9 @@ static void send_hmd_off() {
 }
 
 static void send_controller_off() {
-    int hret = hid_send_feature_report(driver->watchman_dongle_device,
-                                       vive_controller_power_off,
-                                       sizeof(vive_controller_power_off));
+    hid_send_feature_report(driver->watchman_dongle_device,
+                            vive_controller_power_off,
+                            sizeof(vive_controller_power_off));
 }
 
 static void signal_interrupt_handler(int sig) {
@@ -80,7 +80,8 @@ void run(taskfun task) {
 static std::map<std::string, taskfun> dump_commands {
     { "hmd-imu", &dump_hmd_imu },
     { "hmd-light", &dump_hmd_light },
-    { "hmd-config", &dump_config_hmd }
+    { "hmd-config", &dump_config_hmd },
+    { "controller", &dump_controller }
 };
 
 static std::map<std::string, taskfun> send_commands {
