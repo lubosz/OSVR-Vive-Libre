@@ -70,7 +70,7 @@ typedef std::function<void(void)> taskfun;
 
 void run(taskfun task) {
     driver = vl_driver_init();
-    if (!vl_driver_init_devices(driver))
+    if (!vl_driver_init_devices(driver, 0))
         return;
     signal(SIGINT, signal_interrupt_handler);
     task();
@@ -101,15 +101,16 @@ static void print_usage() {
     std::string dmp_cmd_str = commands_to_str(dump_commands);
     std::string snd_cmd_str = commands_to_str(send_commands);
 
-    const char *usage = "\
+#define USAGE "\
 Receive data from and send commands to Vive.\n\n\
 usage: vivectl <command> <message>\n\n\
  dump\n\n\
 %s\n\
  send\n\n\
 %s\n\
-Example: vivectl dump hmd-imu\n";
-    printf(usage, dmp_cmd_str.c_str(), snd_cmd_str.c_str());
+Example: vivectl dump hmd-imu\n"
+
+    printf(USAGE, dmp_cmd_str.c_str(), snd_cmd_str.c_str());
 }
 
 static void argument_error(const char * arg) {

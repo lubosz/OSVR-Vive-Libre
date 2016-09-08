@@ -43,7 +43,7 @@ vl_driver* vl_driver_init() {
     return drv;
 }
 
-bool vl_driver_init_devices(vl_driver *drv) {
+bool vl_driver_init_devices(vl_driver *drv, unsigned index) {
     // Probe for devices
     std::vector<int> paths = vl_driver_get_device_paths(HTC_ID, VIVE_HMD);
     if(paths.size() <= 0) {
@@ -51,10 +51,7 @@ bool vl_driver_init_devices(vl_driver *drv) {
         return false;
     }
 
-    // Open default device (0)
-    unsigned index = 0;
-
-    if(index >= 0 && index < paths.size()){
+    if(index < paths.size()){
         return vl_driver_open_devices(drv, paths[index]);
     } else {
         printf("no device with index: %d\n", index);
