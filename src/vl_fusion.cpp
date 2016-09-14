@@ -95,23 +95,24 @@ Eigen::Quaterniond* vl_fusion::correct_gravity(const Eigen::Vector3d* accelerati
         return quat_init_axis(&this->grav_error_axis, use_angle);
     }
 
-    return NULL;
+    return nullptr;
 }
 
-//vl_filter_queue::vl_filter_queue() {}
 vl_filter_queue::~vl_filter_queue() {}
 vl_filter_queue::vl_filter_queue(int size) {
     this->size = size;
 }
 
-void vl_filter_queue::add(const Eigen::Vector3d& vec)
-{
-    //printf("pushing! size %lu", queue.size());
-    queue.push_back(vec);
-    if (queue.size() > size)
-        queue.pop_front();
-}
+#include <iostream>
 
+void vl_filter_queue::add(Eigen::Vector3d vec)
+{
+    Eigen::Vector3d v = Eigen::Vector3d(vec.x(), vec.y(), vec.z());
+    queue.push_back(v);
+    if (queue.size() > size) {
+        queue.pop_front();
+    }
+}
 Eigen::Vector3d vl_filter_queue::get_mean()
 {
     Eigen::Vector3d mean;
@@ -140,11 +141,11 @@ void vl_fusion::update(float dt, const Eigen::Vector3d& angular_velocity, const 
     }
 
     // gravity correction
-    Eigen::Quaterniond* correction = correct_gravity(&acceleration, ang_vel_length);
-    if (correction != NULL) {
-        orientation = *correction * orientation;
-        delete(correction);
-    }
+    //Eigen::Quaterniond* correction = correct_gravity(&acceleration, ang_vel_length);
+    //if (correction != nullptr) {
+        //orientation = *correction * orientation;
+    //    delete(correction);
+   // }
 
     // mitigate drift due to floating point
     // inprecision with quat multiplication.
