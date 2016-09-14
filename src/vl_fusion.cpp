@@ -29,13 +29,16 @@
 #include "vl_math.h"
 
 vl_fusion::vl_fusion() {
-    orientation = Eigen::Quaterniond(1,0,0,0);
+    orientation = Eigen::Quaterniond(0, -1, 0, 0);
     fq_acceleration = new vl_filter_queue(20);
     fq_angular_velocity = new vl_filter_queue(20);
     grav_gain = 0.05f;
 }
 
-vl_fusion::~vl_fusion() {}
+vl_fusion::~vl_fusion() {
+    delete(fq_acceleration);
+    delete(fq_angular_velocity);
+}
 
 
 #define GRAVITY_EARTH 9.82f
@@ -104,26 +107,38 @@ vl_filter_queue::vl_filter_queue(int size) {
 }
 
 #include <iostream>
+#include <iostream>
+#include <thread>
+
 
 void vl_filter_queue::add(Eigen::Vector3d vec)
 {
+    //mutex.lock();
     Eigen::Vector3d v = Eigen::Vector3d(vec.x(), vec.y(), vec.z());
     queue.push_back(v);
-    if (queue.size() > size) {
+    if (queue.size() > size)
         queue.pop_front();
-    }
+    //mutex.unlock();
 }
 Eigen::Vector3d vl_filter_queue::get_mean()
 {
+    //mutex.lock();
     Eigen::Vector3d mean;
     for(Eigen::Vector3d vec : queue)
-        mean += vec;
-    return mean / (double)queue.size();
+           mean += vec;
+
+    mean /= (double)queue.size();
+    //mutex.unlock();
+    return mean;
 }
 
 
 void vl_fusion::update(float dt, const Eigen::Vector3d& angular_velocity, const Eigen::Vector3d& acceleration)
 {
+
+    //std::mutex mutex;
+    mutex_fusion_update.lock();
+
     Eigen::Vector3d acceleration_world = orientation * acceleration;
 
     iterations += 1;
@@ -141,13 +156,16 @@ void vl_fusion::update(float dt, const Eigen::Vector3d& angular_velocity, const 
     }
 
     // gravity correction
-    //Eigen::Quaterniond* correction = correct_gravity(&acceleration, ang_vel_length);
-    //if (correction != nullptr) {
-        //orientation = *correction * orientation;
-    //    delete(correction);
-   // }
+    Eigen::Quaterniond* correction = correct_gravity(&acceleration, ang_vel_length);
+    if (correction != nullptr) {
+        orientation = *correction * orientation;
+        delete(correction);
+    }
 
     // mitigate drift due to floating point
     // inprecision with quat multiplication.
     orientation.normalize();
+
+    print_eigen_quat("pose", &orientation);
+    mutex_fusion_update.unlock();
 }
