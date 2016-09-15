@@ -39,19 +39,14 @@ static std::vector<int> vl_driver_get_device_paths(int vendor_id, int device_id)
 vl_driver::vl_driver() {
     hid_init();
     previous_ticks = 0;
-
 }
 
 vl_driver::~vl_driver() {
     delete(sensor_fusion);
-    /*    */
-    //hid_close(hmd_device);
-    /*
+    hid_close(hmd_device);
     hid_close(hmd_imu_device);
     hid_close(watchman_dongle_device);
     hid_close(hmd_light_sensor_device);
-    */
-
     hid_exit();
 }
 
@@ -70,8 +65,6 @@ bool vl_driver::init_devices(unsigned index) {
         return false;
     }
 }
-
-
 
 static void print_info_string(int (*fun)(hid_device*, wchar_t*, size_t), const char* what, hid_device* device)
 {
@@ -152,7 +145,7 @@ static hid_device* open_device_idx(int manufacturer, int product, int iface, int
         fprintf(stderr, "Couldn’t find device %04d:%04d interface %d, check that it is plugged in.", manufacturer, product, iface);
         return NULL;
     }
-/**/
+
     if(hid_set_nonblocking(ret, 1) == -1){
         vl_error("failed to set non-blocking on device.");
         return NULL;
@@ -299,7 +292,6 @@ static int get_lowest_index(uint8_t s0, uint8_t s1, uint8_t s2) {
 }
 
 void vl_driver::_update_pose(const vive_headset_imu_report &pkt) {
-    //printf("_update_pose\n");
     int li = get_lowest_index(
                 pkt.samples[0].seq,
                 pkt.samples[1].seq,
@@ -316,7 +308,6 @@ void vl_driver::_update_pose(const vive_headset_imu_report &pkt) {
         }
 
         if (is_timestamp_valid(sample.time_ticks, previous_ticks)) {
-            //printf("valid time\n");
             float dt = FREQ_48MHZ * (sample.time_ticks - previous_ticks);
             Eigen::Vector3d vec3_gyro = vec3_from_gyro(sample.rot);
             Eigen::Vector3d vec3_accel = vec3_from_accel(sample.acc);
@@ -327,22 +318,14 @@ void vl_driver::_update_pose(const vive_headset_imu_report &pkt) {
 }
 
 
-bool vl_driver::update_pose() {
-    bool found_samples = false;
-    //printf("update_pose\n");
-    int size = 0;
-    unsigned char buffer[FEATURE_BUFFER_SIZE];
 
-    while((size = hid_read(hmd_imu_device, buffer, FEATURE_BUFFER_SIZE)) > 0)
+void vl_driver::update_pose() {
+    read_fun update_pose_fun = [this](unsigned char *buffer, int size) {
         if (buffer[0] == VL_MSG_HMD_IMU) {
             vive_headset_imu_report pkt;
             vl_msg_decode_hmd_imu(&pkt, buffer, size);
             this->_update_pose(pkt);
-            found_samples = true;
         }
-
-    if(size < 0)
-        printf("error reading from device\n");
-
-    return found_samples;
+    };
+    read_buffers(hmd_imu_device, update_pose_fun);
 }

@@ -22,11 +22,8 @@ static void dump_hmd_imu() {
 }
 
 static void dump_hmd_imu_pose() {
-    while(true) {
-        if (driver->update_pose())
-            return;
-        //printf("updating pose\n");
-    }
+    while(true)
+        driver->update_pose();
 }
 
 static void send_hmd_on() {
@@ -67,7 +64,7 @@ static void send_controller_off() {
                             vive_controller_power_off,
                             sizeof(vive_controller_power_off));
 }
-/*
+
 static void signal_interrupt_handler(int sig) {
     signal(sig, SIG_IGN);
     delete(driver);
@@ -80,10 +77,8 @@ void run(taskfun task) {
     driver = new vl_driver();
     if (!driver->init_devices(0))
         return;
-    //signal(SIGINT, signal_interrupt_handler);
-    printf("running task\n");
+    signal(SIGINT, signal_interrupt_handler);
     task();
-    printf("deleting drv\n");
     delete(driver);
 }
 
@@ -138,10 +133,10 @@ taskfun _get_task_fun(char *argv[], const std::map<std::string, taskfun>& comman
         return nullptr;
     }
 }
-*/
+
 int main(int argc, char *argv[]) {
-    //taskfun task = nullptr;
-/*
+    taskfun task = nullptr;
+
     if ( argc < 3 ) {
         print_usage();
     } else {
@@ -157,21 +152,6 @@ int main(int argc, char *argv[]) {
 
     if (task)
         run(task);
-*/
-/*
-    run(send_hmd_off);
-*/
-
-
-    driver = new vl_driver();
-    if (!driver->init_devices(0))
-        return 0;
-    //signal(SIGINT, signal_interrupt_handler);
-    printf("running task\n");
-    //dump_hmd_imu_pose();
-    send_hmd_off();
-    printf("deleting drv\n");
-    delete(driver);
 
     printf("taks complete!\n");
 

@@ -106,37 +106,24 @@ vl_filter_queue::vl_filter_queue(int size) {
     this->size = size;
 }
 
-#include <iostream>
-#include <iostream>
-#include <thread>
-
-
 void vl_filter_queue::add(Eigen::Vector3d vec)
 {
-    //mutex.lock();
     Eigen::Vector3d v = Eigen::Vector3d(vec.x(), vec.y(), vec.z());
     queue.push_back(v);
     if (queue.size() > size)
         queue.pop_front();
-    //mutex.unlock();
 }
 Eigen::Vector3d vl_filter_queue::get_mean()
 {
-    //mutex.lock();
     Eigen::Vector3d mean;
     for(Eigen::Vector3d vec : queue)
            mean += vec;
-
-    mean /= (double)queue.size();
-    //mutex.unlock();
-    return mean;
+    return mean / (double)queue.size();
 }
 
 
 void vl_fusion::update(float dt, const Eigen::Vector3d& angular_velocity, const Eigen::Vector3d& acceleration)
 {
-
-    //std::mutex mutex;
     mutex_fusion_update.lock();
 
     Eigen::Vector3d acceleration_world = orientation * acceleration;
@@ -166,6 +153,6 @@ void vl_fusion::update(float dt, const Eigen::Vector3d& angular_velocity, const 
     // inprecision with quat multiplication.
     orientation.normalize();
 
-    print_eigen_quat("pose", &orientation);
+    // print_eigen_quat("pose", &orientation);
     mutex_fusion_update.unlock();
 }
