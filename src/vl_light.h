@@ -51,6 +51,11 @@ uint16_t median_length(lighthouse_reports samples) {
           return lengths[size / 2];
 }
 
+void print_sample_group (vl_light_sample_group g) {
+    printf("channel %c (len %d, samples %d): skip %d, sweep %c epoch %u\n",
+        g.channel, median_length(g.samples), (unsigned) g.samples.size(), g.skip, g.sweep, g.epoch);
+}
+
 unsigned unique_sensor_ids(lighthouse_reports S) {
     std::set<uint8_t> unique_ids;
 
@@ -97,6 +102,15 @@ static struct lighthouse_sync_pulse pulse_table[10] = {
 };
 
 
+lighthouse_sync_pulse lookup_pulse_class(uint16_t pulselen) {
+    for (int i = 0; i < 10; i++)
+        if (pulselen > (pulse_table[i].duration - 250) &&
+                pulselen < (pulse_table[i].duration + 250))
+            return pulse_table[i];
+    printf("error: no pulse class found for length %u\n", pulselen);
+    return lighthouse_sync_pulse();
+}
+
 std::tuple<int,int,int> decode_pulse(lighthouse_reports S) {
 //function [skip, sweep, databit] = decode_pulse(S);
 
@@ -135,15 +149,10 @@ std::tuple<int,int,int> decode_pulse(lighthouse_reports S) {
     int databit = key[ind + 4];
     */
 
-    lighthouse_sync_pulse pulse;
+    lighthouse_sync_pulse pulse = lookup_pulse_class(pulselen);
 
-    for (auto p : pulse_table) {
-        if (pulselen > (pulse.duration - 250) &&
-                pulselen < (pulse.duration + 250)) {
-            pulse = p;
-            break;
-        }
-    }
+    printf("found pulse class: duration %u skip %d sweep %d data %d\n",
+           pulse.duration, pulse.skip, pulse.sweep, pulse.data);
 
     return {pulse.skip, pulse.sweep, pulse.data};
 }
@@ -180,6 +189,7 @@ char channel_detect(uint32_t last_pulse_time, int64_t new_pulse_time) {
         ch = 'C';
     else
         ch = 'e';
+    printf("last %u new %ld channel %c\n", last_pulse_time, new_pulse_time, ch);
     return ch;
 }
 
@@ -272,10 +282,10 @@ vl_light_sample_group process_pulse_set(lighthouse_reports S, int64_t last_pulse
     char ch = channel_detect(last_pulse, t);
 
     char key[] = { 'e', 'H', 'V' };
-    char sweep = key[sweepi + 2];
+    char sweep = key[(sweepi + 2) % 2];
 
     if (S.size() < 5)
-        printf("Warning: channel %c pulse at %d (len %d, samples %ud): skip %d, sweep %c, data %d\n",
+        printf("Warning: channel %c pulse at %d (len %d, samples %d): skip %d, sweep %c, data %d\n",
             ch, t, median_length(S), (unsigned) S.size(), skip, sweep, databit);
 
     // no use for databit here
@@ -340,13 +350,16 @@ std::tuple<int, vl_light_sample_group, int, vl_light_sample_group> update_pulse_
     if (pulse.channel == 'e' || n_sensors < 5) {
         // Invalid pulse, reset state since cannot know which
         // sweep following sweep samples would belong in.
-        //current_sweep = [];
+        current_sweep = vl_light_sample_group();
         //out_pulse = [];
+
+        printf("warning: returning incomplete pulse\n");
 
         return {last_pulse, current_sweep, seq, out_pulse};
     }
 
-    if (!pulse.skip) {
+    //     if (!pulse.skip) {
+    if (pulse.skip == 0) {
         // Valid pulse, but skip flag set.
         // Leave current_sweep as is.
         //out_pulse = [];
@@ -361,6 +374,7 @@ std::tuple<int, vl_light_sample_group, int, vl_light_sample_group> update_pulse_
         printf("Start sweep seq %d: ch %c, sweep %c, pulse detected by %d sensors\n", seq, pulse.channel, pulse.sweep, n_sensors);
 
         current_sweep = pulse;
+        current_sweep.samples = pulse_samples;
 
         out_pulse = {
             /*channel*/ pulse.channel,
@@ -371,6 +385,8 @@ std::tuple<int, vl_light_sample_group, int, vl_light_sample_group> update_pulse_
             /*samples*/ pulse_samples
         };
 
+    } else {
+        printf("warning: pulse is set to skip\n");
     }
 
     return {last_pulse, current_sweep, seq, out_pulse};
@@ -520,8 +536,12 @@ std::tuple<std::vector<vl_light_sample_group>, std::vector<vl_light_sample_group
     // Process all samples
     //for (vive_headset_lighthouse_pulse2 sample : D) {
     for (unsigned i = 0; i < D.size(); i++) {
+
         vive_headset_lighthouse_pulse2 sample = D[i];
         if (sample.length < 2000) {
+
+            //printf("sample %u / %u : sweep\n", i, (unsigned) D.size());
+
             // sweep sample
 
             if (!pulse_inds.empty()) {
@@ -533,21 +553,32 @@ std::tuple<std::vector<vl_light_sample_group>, std::vector<vl_light_sample_group
 
                 pulse_inds.clear();
                 pulse_range = {UINT32_MAX, 0};
-                if (!isempty(pulse))
+                if (!isempty(pulse)) {
+                    printf("pushing pulse!\n");
                     pulses.push_back(pulse);
+                } else {
+                    printf("error: sweep has begun but pulse is empty.\n");
+                }
             }
 
-            if (isempty(current_sweep))
+            if (isempty(current_sweep)) {
+                printf("error: current_sweep is empty.\n");
                 // do not know which sweep, so skip
                 continue;
+            }
 
             // accumulate sweep samples for a single sweep
             sweep_inds.push_back(i);
+            //printf("pushing sweep index %u!\n", i);
         } else {
             // pulse sample
 
-            if (!sweep_inds.empty() && !isempty(current_sweep)) {
+            //printf("sample %u / %u : pulse\n", i, (unsigned) D.size());
+
+            if (!sweep_inds.empty()) {
                 // store one sweep
+
+                printf("store one sweep\n");
 
                 vl_light_sample_group sweep = {
                     /*channel*/ current_sweep.channel,
@@ -558,8 +589,16 @@ std::tuple<std::vector<vl_light_sample_group>, std::vector<vl_light_sample_group
                     /*samples*/ subset(D, sweep_inds)
                 };
 
-                sweeps.push_back(sweep);
                 sweep_inds.clear();
+
+                if (!isempty(current_sweep)) {
+                    printf("pushing sweep!\n");
+                    sweeps.push_back(sweep);
+                } else {
+                    printf("error: pulse has begun but current_sweep is empty.\n");
+                }
+
+
             }
 
             // A pulse belongs to the existing set if it overlaps
@@ -572,10 +611,14 @@ std::tuple<std::vector<vl_light_sample_group>, std::vector<vl_light_sample_group
                 };
 
                 // accumulate a single pulse set
+                //printf("pushing pulse index %u!\n", i);
+
                 pulse_inds.push_back(i);
             } else {
                 // Otherwise, a new pulse set start immediately after
                 // the previous one without any sweep samples in between.
+
+                printf("pulse group start!\n");
 
                 if (sample.timestamp + sample.length < pulse_range.first)
                     printf("Out of order pulse at index %d\n", i);
@@ -586,8 +629,10 @@ std::tuple<std::vector<vl_light_sample_group>, std::vector<vl_light_sample_group
 
                 pulse_inds.clear();
                 pulse_range = {UINT_MAX, 0};
-                if (!isempty(pulse))
+                if (!isempty(pulse)) {
+                    printf("pushing pulse2\n");
                     pulses.push_back(pulse);
+                }
 
             }
         }
@@ -615,6 +660,16 @@ void vl_light_classify_samples(lighthouse_reports *raw_light_samples) {
     std::vector<vl_light_sample_group> sweeps;
     std::vector<vl_light_sample_group> pulses;
     std::tie(sweeps, pulses) = process_lighthouse_samples(sanitized_light_samples);
+
+    printf("printing pulses (len %u)\n", (unsigned) pulses.size());
+    for (auto p : pulses) {
+        print_sample_group(p);
+    }
+
+    printf("printing sweeps (len %u)\n", (unsigned) sweeps.size());
+    for (auto p : sweeps) {
+        print_sample_group(p);
+    }
 
             /*
       R_B = collect_readings('B', sweeps);
