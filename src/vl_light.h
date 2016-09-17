@@ -359,7 +359,7 @@ std::tuple<int, vl_light_sample_group, int, vl_light_sample_group> update_pulse_
     }
 
     //     if (!pulse.skip) {
-    if (pulse.skip == 0) {
+    if (pulse.skip != 0) {
         // Valid pulse, but skip flag set.
         // Leave current_sweep as is.
         //out_pulse = [];
