@@ -4,6 +4,7 @@
 #include <map>
 #include "vl_driver.h"
 #include "vl_config.h"
+#include "vl_light.h"
 
 vl_driver* driver;
 
@@ -44,6 +45,31 @@ static void dump_hmd_light() {
 static void dump_config_hmd() {
     char * config = vl_get_config(driver->hmd_imu_device);
     printf("hmd_imu_device config: %s\n", config);
+}
+
+
+
+static void dump_station_angle() {
+    send_hmd_on();
+
+    lighthouse_reports * raw_light_samples = new lighthouse_reports();
+
+    query_fun read_hmd_light = [raw_light_samples](unsigned char *buffer, int size) {
+        if (buffer[0] == VL_MSG_HMD_LIGHT) {
+            vive_headset_lighthouse_pulse_report2 pkt;
+            vl_msg_decode_hmd_light(&pkt, buffer, size);
+            vl_msg_print_hmd_light_csv(&pkt);
+
+            for(int i = 0; i < 9; i++){
+                raw_light_samples->push_back(pkt.samples[i]);
+            }
+        }
+    };
+
+    while(raw_light_samples->size() < 2000)
+        hid_query(driver->hmd_light_sensor_device, read_hmd_light);
+
+    vl_light_classify_samples(raw_light_samples);
 }
 
 static void send_hmd_off() {
@@ -87,7 +113,8 @@ static std::map<std::string, taskfun> dump_commands {
     { "hmd-light", dump_hmd_light },
     { "hmd-config", dump_config_hmd },
     { "controller", dump_controller },
-    { "hmd-imu-pose", dump_hmd_imu_pose }
+    { "hmd-imu-pose", dump_hmd_imu_pose },
+    { "lighthouse-angles", dump_station_angle }
 };
 
 static std::map<std::string, taskfun> send_commands {
@@ -152,8 +179,6 @@ int main(int argc, char *argv[]) {
 
     if (task)
         run(task);
-
-    printf("taks complete!\n");
 
     return 0;
 }
