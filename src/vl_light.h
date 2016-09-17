@@ -6,6 +6,9 @@
 
 #include "vl_messages.h"
 
+#define VL_ROTOR_RPS 60 // 60 rps
+#define VL_TICK_RATE 48e6 // 48 Mhz
+
 typedef std::vector<vive_headset_lighthouse_pulse2> lighthouse_reports;
 
 typedef std::function<bool(vive_headset_lighthouse_pulse2)> sample_filter;
@@ -13,10 +16,9 @@ typedef std::function<bool(vive_headset_lighthouse_pulse2)> sample_filter;
 
 struct vl_light_sample_group {
     char channel;
-    char sweep;
+    char sweep; // rotor
     uint32_t epoch;
     int skip;
-    int rotor;
     int seq;
     lighthouse_reports samples;
 };
@@ -74,6 +76,26 @@ unsigned unique_sensor_ids(lighthouse_reports S) {
 //
 // Reference: https://github.com/nairol/LighthouseRedox/blob/master/docs/Light//20Emissions.md
 
+struct lighthouse_sync_pulse {
+    uint16_t duration;
+    int skip;
+    int sweep; //rotor
+    int data;
+};
+
+static struct lighthouse_sync_pulse pulse_table[10] = {
+    { 2500, -1, -1, -1 },
+    { 3000, 0, 0, 0 },
+    { 3500, 0, 1, 0 },
+    { 4000, 0, 0, 1 },
+    { 4500, 0, 1, 1 },
+    { 5000, 1, 0, 0 },
+    { 5500, 1, 1, 0 },
+    { 6000, 1, 0, 1 },
+    { 6500, 1, 1, 1 },
+    { 7000, -1, -1, -1 },
+};
+
 
 std::tuple<int,int,int> decode_pulse(lighthouse_reports S) {
 //function [skip, sweep, databit] = decode_pulse(S);
@@ -90,6 +112,7 @@ std::tuple<int,int,int> decode_pulse(lighthouse_reports S) {
     uint16_t pulselen = median_length(S);
     //pulselen = median(S.length);
 
+    /*
     int key[] = {
         2500, -1, -1, -1,
         3000, 0, 0, 0,
@@ -110,8 +133,19 @@ std::tuple<int,int,int> decode_pulse(lighthouse_reports S) {
     int skip = key[ind + 2];
     int sweep = key[ind + 3];
     int databit = key[ind + 4];
+    */
 
-    return {skip, sweep, databit};
+    lighthouse_sync_pulse pulse;
+
+    for (auto p : pulse_table) {
+        if (pulselen > (pulse.duration - 250) &&
+                pulselen < (pulse.duration + 250)) {
+            pulse = p;
+            break;
+        }
+    }
+
+    return {pulse.skip, pulse.sweep, pulse.data};
 }
 
 
@@ -127,19 +161,17 @@ std::tuple<int,int,int> decode_pulse(lighthouse_reports S) {
 // This function requires the globals 'tick_rate' and 'rotor_rps'
 // to be set.
 
-/*
-char channel_detect(last_pulse_time, new_pulse_time) {
+char channel_detect(uint32_t last_pulse_time, int64_t new_pulse_time) {
 //function ch = channel_detect(last_pulse_time, new_pulse_time);
 
-    global tick_rate;
-    global rotor_rps;
-
     // Two sweeps per rotation
-    period = tick_rate / rotor_rps / 2;
+    int64_t period = VL_TICK_RATE / VL_ROTOR_RPS / 2;
     // ??
-    space = 20e3;
+    int64_t space = 20e3;
 
-    dt = new_pulse_time - last_pulse_time;
+    int64_t dt = new_pulse_time - last_pulse_time;
+
+    char ch;
     if (abs(dt - period) < 4000)
         ch = 'A';
     else if (abs(dt - (period - space)) < 4000)
@@ -147,10 +179,9 @@ char channel_detect(last_pulse_time, new_pulse_time) {
     else if (abs(dt - space) < 4000)
         ch = 'C';
     else
-        ch = 'error';
+        ch = 'e';
     return ch;
 }
-*/
 
 // Get a sub-set of a struct of arrays
 //
@@ -217,7 +248,7 @@ void ticks_to_mm(ticks, dist) {
 }
 */
 
-vl_light_sample_group process_pulse_set(lighthouse_reports S, int last_pulse) {
+vl_light_sample_group process_pulse_set(lighthouse_reports S, int64_t last_pulse) {
 
     int skip;
     int sweepi;
@@ -238,8 +269,7 @@ vl_light_sample_group process_pulse_set(lighthouse_reports S, int last_pulse) {
     uint32_t t = median_timestamp(S);
     // t = median(S.timestamp);
 
-    //char ch = channel_detect(last_pulse, t);
-    char ch = 'O';
+    char ch = channel_detect(last_pulse, t);
 
     char key[] = { 'e', 'H', 'V' };
     char sweep = key[sweepi + 2];
@@ -248,19 +278,12 @@ vl_light_sample_group process_pulse_set(lighthouse_reports S, int last_pulse) {
         printf("Warning: channel %c pulse at %d (len %d, samples %ud): skip %d, sweep %c, data %d\n",
             ch, t, median_length(S), (unsigned) S.size(), skip, sweep, databit);
 
-
-        /*
-        printf('Warning: channel %s pulse at %d (len %d, samples %d): skip %d, sweep %c, data %d\n',
-            ch, t, median(S.length), S.size(), skip, sweep, databit);
-        */
-
-        // no use for databit here
+    // no use for databit here
     vl_light_sample_group p = {
         /*channel*/ ch,
         /*sweep*/ sweep,
         /*epoch*/ t,
         /*skip*/ skip,
-        /*rotor*/ 0,
         /*seq*/ 0,
         /*samples*/ lighthouse_reports()
     };
@@ -300,7 +323,7 @@ vl_light_sample_group process_pulse_set(lighthouse_reports S, int last_pulse) {
 
 
 std::tuple<int, vl_light_sample_group, int, vl_light_sample_group> update_pulse_state(
-        lighthouse_reports pulse_samples, int last_pulse, vl_light_sample_group current_sweep, int seq) {
+        lighthouse_reports pulse_samples, int64_t last_pulse, vl_light_sample_group current_sweep, int seq) {
 
     //function [last_pulse, current_sweep, seq, out_pulse] = ...
     //		update_pulse_state(pulse_samples, last_pulse, current_sweep, seq);
@@ -344,7 +367,6 @@ std::tuple<int, vl_light_sample_group, int, vl_light_sample_group> update_pulse_
             /*sweep*/ pulse.sweep,
             /*epoch*/ pulse.epoch,
             /*skip*/ 0,
-            /*rotor*/ 0,
             /*seq*/ seq,
             /*samples*/ pulse_samples
         };
@@ -353,13 +375,6 @@ std::tuple<int, vl_light_sample_group, int, vl_light_sample_group> update_pulse_
 
     return {last_pulse, current_sweep, seq, out_pulse};
 }
-
-
-
-/*
-
-*/
-
 
 /*
 void collect_readings(station, sweeps) {
@@ -489,12 +504,12 @@ std::tuple<std::vector<vl_light_sample_group>, std::vector<vl_light_sample_group
     std::vector<int> pulse_inds;
     std::vector<int> sweep_inds;
 
-    int last_pulse = -1e6;
+    int64_t last_pulse = -1e6;
     int seq = 0;
 
     vl_light_sample_group current_sweep;
     //pulse_range = [Inf -Inf]; // begin, end timestamp
-    std::pair<uint32_t, uint32_t> pulse_range = {UINT_MAX, 0};
+    std::pair<uint32_t, uint32_t> pulse_range = {UINT32_MAX, 0};
 
     //pulses = struct([]);
     //sweeps = struct([]);
@@ -517,7 +532,7 @@ std::tuple<std::vector<vl_light_sample_group>, std::vector<vl_light_sample_group
                 //[last_pulse, current_sweep, seq, pulse] = update_pulse_state(subset(D, pulse_inds), last_pulse, current_sweep, seq);
 
                 pulse_inds.clear();
-                pulse_range = {UINT_MAX, 0};
+                pulse_range = {UINT32_MAX, 0};
                 if (!isempty(pulse))
                     pulses.push_back(pulse);
             }
@@ -536,10 +551,9 @@ std::tuple<std::vector<vl_light_sample_group>, std::vector<vl_light_sample_group
 
                 vl_light_sample_group sweep = {
                     /*channel*/ current_sweep.channel,
-                    /*sweep*/ 0,
+                    /*sweep*/ current_sweep.sweep,
                     /*epoch*/ current_sweep.epoch,
                     /*skip*/ 0,
-                    /*rotor*/ current_sweep.sweep,
                     /*seq*/ seq,
                     /*samples*/ subset(D, sweep_inds)
                 };
