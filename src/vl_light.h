@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <string>
+#include <set>
 
 #include "vl_messages.h"
 
@@ -13,13 +14,49 @@ typedef std::function<bool(vive_headset_lighthouse_pulse2)> sample_filter;
 struct vl_light_sample_group {
     char channel;
     char sweep;
-    int epoch;
+    uint32_t epoch;
     int skip;
     int rotor;
     int seq;
     lighthouse_reports samples;
 };
 
+uint32_t median_timestamp(lighthouse_reports samples) {
+    std::vector<uint32_t> timestamps;
+
+    for (auto s : samples)
+        timestamps.push_back(s.timestamp);
+
+    size_t size = timestamps.size();
+    std::sort(timestamps.begin(), timestamps.end());
+    if (size  % 2 == 0)
+          return (timestamps[size / 2 - 1] + timestamps[size / 2]) / 2;
+      else
+          return timestamps[size / 2];
+}
+
+uint16_t median_length(lighthouse_reports samples) {
+    std::vector<uint16_t> lengths;
+
+    for (auto s : samples)
+        lengths.push_back(s.length);
+
+    size_t size = lengths.size();
+    std::sort(lengths.begin(), lengths.end());
+    if (size  % 2 == 0)
+          return (lengths[size / 2 - 1] + lengths[size / 2]) / 2;
+      else
+          return lengths[size / 2];
+}
+
+unsigned unique_sensor_ids(lighthouse_reports S) {
+    std::set<uint8_t> unique_ids;
+
+    for (auto s : S)
+        unique_ids.insert(s.sensor_id);
+
+    return unique_ids.size();
+}
 
 // Decode Vive Lighthouse sync pulses
 //
@@ -37,39 +74,46 @@ struct vl_light_sample_group {
 //
 // Reference: https://github.com/nairol/LighthouseRedox/blob/master/docs/Light//20Emissions.md
 
-/*
-void decode_pulse(int S) {
+
+std::tuple<int,int,int> decode_pulse(lighthouse_reports S) {
 //function [skip, sweep, databit] = decode_pulse(S);
-    ndups = length(S.sensor_id) - length(unique(S.sensor_id));
+
+    unsigned ndups = S.size() - unique_sensor_ids(S);
+    //ndups = length(S.sensor_id) - length(unique(S.sensor_id));
 
     // not fatal
     if (ndups != 0)
-        printf('//d duplicate sensors\n', ndups);
+        printf("%d duplicate sensors\n", ndups);
 
     // robust against outlier samples
-    pulselen = median(S.length);
 
-    key = [
-        2500, -1, -1, -1;
-        3000, 0, 0, 0;
-        3500, 0, 1, 0;
-        4000, 0, 0, 1;
-        4500, 0, 1, 1;
-        5000, 1, 0, 0;
-        5500, 1, 1, 0;
-        6000, 1, 0, 1;
-        6500, 1, 1, 1;
-        7000, -1, -1, -1;
-    ];
+    uint16_t pulselen = median_length(S);
+    //pulselen = median(S.length);
+
+    int key[] = {
+        2500, -1, -1, -1,
+        3000, 0, 0, 0,
+        3500, 0, 1, 0,
+        4000, 0, 0, 1,
+        4500, 0, 1, 1,
+        5000, 1, 0, 0,
+        5500, 1, 1, 0,
+        6000, 1, 0, 1,
+        6500, 1, 1, 1,
+        7000, -1, -1, -1,
+    };
 
     // classify to the closest key value
-    [mindiff,  ind] = min(abs(key(:,1) - pulselen));
+    // [mindiff,  ind] = min(abs(key(:,1) - pulselen));
+    unsigned ind = 0;
 
-    skip = key(ind, 2);
-    sweep = key(ind, 3);
-    databit = key(ind, 4);
+    int skip = key[ind + 2];
+    int sweep = key[ind + 3];
+    int databit = key[ind + 4];
+
+    return {skip, sweep, databit};
 }
-*/
+
 
 // Recognize the Vive Lighthouse channel from a pulse
 //
@@ -173,6 +217,58 @@ void ticks_to_mm(ticks, dist) {
 }
 */
 
+vl_light_sample_group process_pulse_set(lighthouse_reports S, int last_pulse) {
+
+    int skip;
+    int sweepi;
+    int databit;
+    std::tie(skip, sweepi, databit) = decode_pulse(S);
+
+    // Pick median as the pulse timestamp.
+
+    // Pulse lit duration varies according to the data bit sent
+    // over-the-light, and the only correct point is the beginning
+    // of the lit period.
+
+    // It seems the starting times for lit periods do not all align
+    // exactly, there can be few sensors that activate slightly late.
+    // Their stopping time looks to me much better in sync, but
+    // let's try simply the starting time concensus.
+
+    uint32_t t = median_timestamp(S);
+    // t = median(S.timestamp);
+
+    //char ch = channel_detect(last_pulse, t);
+    char ch = 'O';
+
+    char key[] = { 'e', 'H', 'V' };
+    char sweep = key[sweepi + 2];
+
+    if (S.size() < 5)
+        printf("Warning: channel %c pulse at %d (len %d, samples %ud): skip %d, sweep %c, data %d\n",
+            ch, t, median_length(S), (unsigned) S.size(), skip, sweep, databit);
+
+
+        /*
+        printf('Warning: channel %s pulse at %d (len %d, samples %d): skip %d, sweep %c, data %d\n',
+            ch, t, median(S.length), S.size(), skip, sweep, databit);
+        */
+
+        // no use for databit here
+    vl_light_sample_group p = {
+        /*channel*/ ch,
+        /*sweep*/ sweep,
+        /*epoch*/ t,
+        /*skip*/ skip,
+        /*rotor*/ 0,
+        /*seq*/ 0,
+        /*samples*/ lighthouse_reports()
+    };
+
+    return p;
+}
+
+
 // Update pulse detection state machine
 //
 // [last_pulse, current_sweep, seq, out_pulse] = ...
@@ -211,8 +307,8 @@ std::tuple<int, vl_light_sample_group, int, vl_light_sample_group> update_pulse_
 
     vl_light_sample_group out_pulse;
 
-    //vl_pulse pulse = process_pulse_set(pulse_samples, last_pulse);
-    vl_light_sample_group pulse;
+    vl_light_sample_group pulse = process_pulse_set(pulse_samples, last_pulse);
+    //vl_light_sample_group pulse;
     last_pulse = pulse.epoch;
 
     // unsigned n_sensors = length(pulse_samples.timestamp);
@@ -261,37 +357,7 @@ std::tuple<int, vl_light_sample_group, int, vl_light_sample_group> update_pulse_
 
 
 /*
-void process_pulse_set(S, last_pulse) {
-    [skip, sweepi, databit] = decode_pulse(S);
 
-    // Pick median as the pulse timestamp.
-
-    // Pulse lit duration varies according to the data bit sent
-    // over-the-light, and the only correct point is the beginning
-    // of the lit period.
-
-    // It seems the starting times for lit periods do not all align
-    // exactly, there can be few sensors that activate slightly late.
-    // Their stopping time looks to me much better in sync, but
-    // let's try simply the starting time concensus.
-    t = median(S.timestamp);
-
-    ch = channel_detect(last_pulse, t);
-
-    key = [ 'e', 'H', 'V' ];
-    sweep = key(sweepi + 2);
-
-    if (length(S.timestamp) < 5)
-        printf('Warning: channel //s pulse at //d (len //d, samples //d): skip //d, sweep //c, data //d\n', ...
-            ch, t, median(S.length), length(S.timestamp), skip, sweep, databit);
-
-    // no use for databit here
-    P = struct('epoch', t, ...
-        'channel', ch, ...
-        'skip', skip, ...
-        'sweep', sweep);
-    return P;
-}
 */
 
 
