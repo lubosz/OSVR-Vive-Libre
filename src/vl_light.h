@@ -13,7 +13,7 @@
 #define VL_ROTOR_RPS 60 // 60 rps
 #define VL_TICK_RATE 48e6 // 48 Mhz
 
-typedef std::vector<vive_headset_lighthouse_pulse2> lighthouse_reports;
+typedef std::vector<vive_headset_lighthouse_pulse2> vl_lighthouse_samples;
 
 typedef std::function<bool(vive_headset_lighthouse_pulse2)> sample_filter;
 
@@ -24,10 +24,10 @@ struct vl_light_sample_group {
     uint32_t epoch;
     int skip;
     int seq;
-    lighthouse_reports samples;
+    vl_lighthouse_samples samples;
 };
 
-uint32_t median_timestamp(lighthouse_reports samples) {
+uint32_t median_timestamp(vl_lighthouse_samples samples) {
     std::vector<uint32_t> timestamps;
 
     for (auto s : samples)
@@ -41,7 +41,7 @@ uint32_t median_timestamp(lighthouse_reports samples) {
           return timestamps[size / 2];
 }
 
-uint16_t median_length(lighthouse_reports samples) {
+uint16_t median_length(vl_lighthouse_samples samples) {
     std::vector<uint16_t> lengths;
 
     for (auto s : samples)
@@ -60,7 +60,7 @@ void print_sample_group (vl_light_sample_group g) {
         g.channel, median_length(g.samples), g.samples.size(), g.skip, g.sweep, g.epoch);
 }
 
-unsigned unique_sensor_ids(lighthouse_reports S) {
+unsigned unique_sensor_ids(vl_lighthouse_samples S) {
     std::set<uint8_t> unique_ids;
 
     for (auto s : S)
@@ -115,7 +115,7 @@ lighthouse_sync_pulse lookup_pulse_class(uint16_t pulselen) {
 //
 // Reference: https://github.com/nairol/LighthouseRedox/blob/master/docs/Light//20Emissions.md
 
-std::tuple<int,int,int> decode_pulse(lighthouse_reports S) {
+std::tuple<int,int,int> decode_pulse(vl_lighthouse_samples S) {
     unsigned ndups = S.size() - unique_sensor_ids(S);
 
     // not fatal
@@ -230,7 +230,7 @@ double ticks_to_mm(ticks, dist) {
 }
 */
 
-vl_light_sample_group process_pulse_set(lighthouse_reports S, int64_t last_pulse) {
+vl_light_sample_group process_pulse_set(vl_lighthouse_samples S, int64_t last_pulse) {
 
     int skip;
     int sweepi;
@@ -266,7 +266,7 @@ vl_light_sample_group process_pulse_set(lighthouse_reports S, int64_t last_pulse
         /*epoch*/ t,
         /*skip*/ skip,
         /*seq*/ 0,
-        /*samples*/ lighthouse_reports()
+        /*samples*/ vl_lighthouse_samples()
     };
 
     return p;
@@ -302,7 +302,7 @@ vl_light_sample_group process_pulse_set(lighthouse_reports S, int64_t last_pulse
 //			- samples: the subset of D with the samples indicating this pulse
 
 std::tuple<int, vl_light_sample_group, int, vl_light_sample_group> update_pulse_state(
-        lighthouse_reports pulse_samples,
+        vl_lighthouse_samples pulse_samples,
         int64_t last_pulse,
         vl_light_sample_group current_sweep,
         int seq) {
@@ -371,7 +371,7 @@ std::vector<vl_light_sample_group> filter_sweeps(
     return filtered;
 }
 
-int find_max_sendor_id(lighthouse_reports samples) {
+int find_max_sendor_id(vl_lighthouse_samples samples) {
     std::vector<int> sensor_ids;
     for (auto s : samples) {
         sensor_ids.push_back(s.sensor_id);
@@ -379,8 +379,8 @@ int find_max_sendor_id(lighthouse_reports samples) {
     return *std::max_element(sensor_ids.begin(), sensor_ids.end());
 }
 
-lighthouse_reports filter_samples_by_sensor_id(lighthouse_reports samples, int sensor_id) {
-    lighthouse_reports filtered;
+vl_lighthouse_samples filter_samples_by_sensor_id(vl_lighthouse_samples samples, int sensor_id) {
+    vl_lighthouse_samples filtered;
     for(auto s : samples)
         if (s.sensor_id == sensor_id)
             filtered.push_back(s);
@@ -419,8 +419,8 @@ std::map<int, vl_angles> collect_readings(char station, std::vector<vl_light_sam
 
         // loop over sensors ids, only interested in both x and y
         for (int s = 0; s < max_sensor_id; s++) {
-            lighthouse_reports xi = filter_samples_by_sensor_id(x_sweep.samples, s);
-            lighthouse_reports yi = filter_samples_by_sensor_id(y_sweep.samples, s);
+            vl_lighthouse_samples xi = filter_samples_by_sensor_id(x_sweep.samples, s);
+            vl_lighthouse_samples yi = filter_samples_by_sensor_id(y_sweep.samples, s);
 
             if (xi.size() > 1 || yi.size() > 1)
                 printf("error: Same sensor sampled multiple times??\n");
@@ -447,8 +447,8 @@ std::map<int, vl_angles> collect_readings(char station, std::vector<vl_light_sam
 }
 
 
-lighthouse_reports filter_reports (lighthouse_reports reports, sample_filter filter_fun) {
-    lighthouse_reports results;
+vl_lighthouse_samples filter_reports (vl_lighthouse_samples reports, sample_filter filter_fun) {
+    vl_lighthouse_samples results;
     for (auto sample : reports)
         if (filter_fun(sample))
             results.push_back(sample);
@@ -501,8 +501,8 @@ bool is_sample_valid(vive_headset_lighthouse_pulse2 s) {
 // Only the meaningful pulses are returned, i.e. those with the bit skip=false.
 
 
-lighthouse_reports subset(lighthouse_reports D, std::vector<int> indices) {
-    lighthouse_reports results;
+vl_lighthouse_samples subset(vl_lighthouse_samples D, std::vector<int> indices) {
+    vl_lighthouse_samples results;
     for (auto i : indices)
         results.push_back(D[i]);
     return results;
@@ -512,7 +512,7 @@ bool isempty(vl_light_sample_group samples) {
     return samples.samples.empty();
 }
 
-std::tuple<std::vector<vl_light_sample_group>, std::vector<vl_light_sample_group>> process_lighthouse_samples(lighthouse_reports D) {
+std::tuple<std::vector<vl_light_sample_group>, std::vector<vl_light_sample_group>> process_lighthouse_samples(vl_lighthouse_samples D) {
 
     // state for the processing loop
     std::vector<int> pulse_inds;
@@ -614,11 +614,38 @@ std::tuple<std::vector<vl_light_sample_group>, std::vector<vl_light_sample_group
     return {sweeps, pulses};
 }
 
-void vl_light_classify_samples(lighthouse_reports *raw_light_samples) {
+void print_readings(std::map<int, vl_angles> readings) {
+    for (auto angles : readings) {
+        for (unsigned i = 0; i < angles.second.x.size(); i++ ) {
+            printf("sensor %d, x %d, y %d, t %d\n",
+                   angles.first,
+                   angles.second.x[i],
+                   angles.second.y[i],
+                   angles.second.t[i]);
+        }
+    }
+}
+
+void write_readings_to_csv(std::map<int, vl_angles> readings, std::string file_name) {
+    std::ofstream csv_file;
+    csv_file.open (file_name);
+
+    printf("Writing %s\n", file_name.c_str());
+    for (auto angles : readings)
+        for (unsigned i = 0; i < angles.second.x.size(); i++ )
+            csv_file << angles.first << ","
+                     << angles.second.x[i] << ","
+                     << angles.second.y[i] << ","
+                     << angles.second.t[i] << "\n";
+
+    csv_file.close();
+}
+
+void vl_light_classify_samples(vl_lighthouse_samples *raw_light_samples) {
 
     // Take just a little bit for analysis
     // deliberately start middle of a sweep
-    lighthouse_reports sanitized_light_samples = filter_reports(*raw_light_samples, &is_sample_valid);
+    vl_lighthouse_samples sanitized_light_samples = filter_reports(*raw_light_samples, &is_sample_valid);
 
     printf("raw: %ld\n", raw_light_samples->size());
     printf("valid: %ld\n", sanitized_light_samples.size());
@@ -634,59 +661,30 @@ void vl_light_classify_samples(lighthouse_reports *raw_light_samples) {
     std::tie(sweeps, pulses) = process_lighthouse_samples(sanitized_light_samples);
 
     printf("found %zu pulses\n", pulses.size());
+    /*
     for (auto p : pulses) {
         print_sample_group(p);
     }
+    */
 
-    printf("found %zu sweeps)\n", sweeps.size());
+    printf("found %zu sweeps\n", sweeps.size());
+    /*
     for (auto p : sweeps) {
         print_sample_group(p);
     }
+    */
 
     std::map<int, vl_angles> R_B = collect_readings('B', sweeps);
     std::map<int, vl_angles> R_C = collect_readings('C', sweeps);
 
     printf("Found %zu sensors with B angles\n", R_B.size());
-    for (auto angles : R_B ) {
-        printf("Sensor id %d\n", angles.first);
-
-        for (unsigned i = 0; i < angles.second.x.size(); i++ ) {
-            printf("x %d y %d t %d\n",
-                   angles.second.x[i],
-                   angles.second.y[i],
-                   angles.second.t[i]);
-        }
-    }
+    print_readings(R_B);
 
     printf("Found %zu sensors with C angles\n", R_C.size());
-    for (auto angles : R_C ) {
-        printf("Sensor id %d\n", angles.first);
+    print_readings(R_C);
 
-        for (unsigned i = 0; i < angles.second.x.size(); i++ ) {
-            printf("x %d y %d t %d\n",
-                   angles.second.x[i],
-                   angles.second.y[i],
-                   angles.second.t[i]);
-        }
-    }
-
-
-    std::ofstream csv_file;
-    csv_file.open ("c_angles.csv");
-
-    printf("Writing c_angles.csv\n");
-    for (auto angles : R_C ) {
-        printf("Sensor id %d\n", angles.first);
-
-        for (unsigned i = 0; i < angles.second.x.size(); i++ ) {
-            printf("x %d y %d t %d\n",
-                   angles.second.x[i],
-                   angles.second.y[i],
-                   angles.second.t[i]);
-
-            csv_file << angles.first << "," <<angles.second.x[i] << "," << angles.second.y[i] << "," << angles.second.t[i] << "\n";
-        }
-    }
-
-    csv_file.close();
+    if (R_B.size() > 0)
+        write_readings_to_csv(R_B, "b_angles.csv");
+    if (R_C.size() > 0)
+        write_readings_to_csv(R_C, "c_angles.csv");
 }
