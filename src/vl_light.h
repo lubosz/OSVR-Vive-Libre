@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <set>
+#include <map>
 
 #include "vl_messages.h"
 
@@ -231,6 +232,13 @@ void subset(S, elms) {
 // symmetric, this will remove the differences from variations in laser
 // line width at the sensor. Then epoch is subtracted to produce
 // the time delta directly proportional to the angle.
+
+
+double ticks_sample_to_angle(vive_headset_lighthouse_pulse2 sample, uint32_t epoch) {
+    double angle_ticks = sample.timestamp + sample.length / 2 - epoch;
+    return angle_ticks;
+}
+
 /*
 void ticks_sample_to_angle(samples, epoch) {
     angle_ticks = samples.timestamp + samples.length ./ 2 - epoch;
@@ -379,59 +387,129 @@ std::tuple<int, vl_light_sample_group, int, vl_light_sample_group> update_pulse_
     return {last_pulse, current_sweep, seq, out_pulse};
 }
 
+
+struct vl_angles {
+    std::vector<int> x;
+    std::vector<int> y;
+    std::vector<int> t;
+};
+
+
+int find_max_seq(std::vector<vl_light_sample_group> sweeps) {
+    std::vector<int> seqs;
+    for (auto g : sweeps) {
+        seqs.push_back(g.seq);
+    }
+    return *std::max_element(seqs.begin(), seqs.end());
+}
+
+std::vector<vl_light_sample_group> filter_sweeps(std::vector<vl_light_sample_group> sweeps, char ch, int seq, char rotor) {
+    std::vector<vl_light_sample_group> filtered;
+    for (auto g : sweeps)
+        if (g.channel == ch && g.seq == seq && g.sweep == rotor)
+            filtered.push_back(g);
+    return filtered;
+}
+
+int find_max_sendor_id(lighthouse_reports samples) {
+    std::vector<int> sensor_ids;
+    for (auto s : samples) {
+        sensor_ids.push_back(s.sensor_id);
+    }
+    return *std::max_element(sensor_ids.begin(), sensor_ids.end());
+}
+
 /*
-void collect_readings(station, sweeps) {
+lighthouse_reports get_all_samples(std::vector<vl_light_sample_group> ) {
+    lighthouse_reports
+}
+
+lighthouse_reports get_all_epochs(std::vector<vl_light_sample_group> ) {
+    lighthouse_reports
+}
+*/
+
+lighthouse_reports filter_samples_by_sensor_id(lighthouse_reports samples, int sensor_id) {
+    lighthouse_reports filtered;
+    for(auto s : samples)
+        if (s.sensor_id == sensor_id)
+            filtered.push_back(s);
+    return filtered;
+}
+
+std::map<int, vl_angles> collect_readings(char station, std::vector<vl_light_sample_group> sweeps) {
     // Collect all readings into a nice data structure
     // x and y angles, and a timestamp (x sweep epoch)
     // array R(sensor_id + 1).x, .y, .t
-    R = struct('x', [], 'y', [], 't', []);
 
-    maxseq = max([sweeps.seq]);
+    //R = struct('x', [], 'y', [], 't', []);
+
+    std::map<int, vl_angles> R;
+
+    int maxseq = find_max_seq(sweeps);
+    //maxseq = max([sweeps.seq]);
 
     // loop over sequences
-    for (i = 1:maxseq;) {
+    for (int i = 1; i < maxseq; i++) {
         // choose station and sequence
-        mask = [sweeps.channel] == station & [sweeps.seq] == i;
 
-        x_ind = find(mask & [sweeps.rotor] == 'H');
-        y_ind = find(mask & [sweeps.rotor] == 'V');
+        std::vector<vl_light_sample_group> x_ind = filter_sweeps(sweeps, station, i, 'H');
+        std::vector<vl_light_sample_group> y_ind = filter_sweeps(sweeps, station, i, 'V');
 
-        if (length(x_ind) < 1 || length(y_ind) < 1)
+        //mask = [sweeps.channel] == station & [sweeps.seq] == i;
+        //x_ind = find(mask & [sweeps.rotor] == 'H');
+        //y_ind = find(mask & [sweeps.rotor] == 'V');
+
+        if (x_ind.size() < 1 || y_ind.size() < 1) {
             // Either or both sweeps are empty, ignore.
+            printf("Warning: Either or both sweeps are empty, ignore.\n");
             break;
+        }
 
 
-        if (length(x_ind) != 1 || length(y_ind) != 1)
-            // x_ind, y_ind
-            error("Unexpected number of indices, should be just one each");
+        if (x_ind.size() != 1 || y_ind.size() != 1)
+            printf("error: Unexpected number of indices [%zu %zu], should be just one each\n", x_ind.size(), y_ind.size());
 
-        x_samples = sweeps(x_ind).samples;
-        y_samples = sweeps(y_ind).samples;
+        vl_light_sample_group x_sweep = x_ind[0];
+        vl_light_sample_group y_sweep = y_ind[0];
 
-        x_ang = ticks_sample_to_angle(x_samples, sweeps(x_ind).epoch);
-        y_ang = ticks_sample_to_angle(y_samples, sweeps(y_ind).epoch);
+        //x_ang = ticks_sample_to_angle(x_sweep.samples, x_sweep.epoch);
+        //y_ang = ticks_sample_to_angle(y_sweep.samples, y_sweep.epoch);
+
+        int max_sensor_id = find_max_sendor_id(x_sweep.samples);
 
         // loop over sensors ids, only interested in both x and y
-        for (s = 0:max(x_samples.sensor_id)) {
-            xi = find(x_samples.sensor_id == s);
-            yi = find(y_samples.sensor_id == s);
+        for (int s = 0; s < max_sensor_id; s++) {
+            //xi = find(x_samples.sensor_id == s);
+            //yi = find(y_samples.sensor_id == s);
 
-            if (length(xi) > 1 || length(yi) > 1)
-                error("Same sensor sampled multiple times??");
+            lighthouse_reports xi = filter_samples_by_sensor_id(x_sweep.samples, s);
+            lighthouse_reports yi = filter_samples_by_sensor_id(y_sweep.samples, s);
 
-            if (length(xi) < 1 || length(yi) < 1)
+            if (xi.size() > 1 || yi.size() > 1)
+                printf("error: Same sensor sampled multiple times??");
+
+            if (xi.size() < 1 || yi.size() < 1)
                 continue;
 
-            R(s+1).x(end + 1) = x_ang(xi);
-            R(s+1).y(end + 1) = y_ang(yi);
+            vl_angles angles;
+
+            double x_ang = ticks_sample_to_angle(xi[0], x_sweep.epoch);
+            double y_ang = ticks_sample_to_angle(yi[0], y_sweep.epoch);
+
+            angles.x.push_back(x_ang);
+            angles.y.push_back(y_ang);
 
             // Assumes all measurements happened at the same time,
             // which is wrong.
-            R(s+1).t(end + 1) = sweeps(x_ind).epoch;
+            angles.t.push_back(x_sweep.epoch);
+
+            R.insert(std::pair<int, vl_angles>(s, angles));
         }
     }
+    return R;
 }
-*/
+
 
 
 
