@@ -66,7 +66,7 @@ static void dump_station_angle() {
         }
     };
 
-    while(raw_light_samples->size() < 2000)
+    while(raw_light_samples->size() < 10000)
         hid_query(driver->hmd_light_sensor_device, read_hmd_light);
 
     vl_light_classify_samples(raw_light_samples);
