@@ -205,8 +205,8 @@ void subset(S, elms) {
 // the time delta directly proportional to the angle.
 
 
-double ticks_sample_to_angle(vive_headset_lighthouse_pulse2 sample, uint32_t epoch) {
-    double angle_ticks = sample.timestamp + sample.length / 2 - epoch;
+uint32_t ticks_sample_to_angle(vive_headset_lighthouse_pulse2 sample, uint32_t epoch) {
+    uint32_t angle_ticks = sample.timestamp + sample.length / 2 - epoch;
     return angle_ticks;
 }
 
@@ -348,9 +348,9 @@ std::tuple<int, vl_light_sample_group, int, vl_light_sample_group> update_pulse_
 
 
 struct vl_angles {
-    std::vector<int> x;
-    std::vector<int> y;
-    std::vector<int> t;
+    std::vector<uint32_t> x;
+    std::vector<uint32_t> y;
+    std::vector<uint32_t> t;
 };
 
 
@@ -617,7 +617,7 @@ std::tuple<std::vector<vl_light_sample_group>, std::vector<vl_light_sample_group
 void print_readings(std::map<int, vl_angles> readings) {
     for (auto angles : readings) {
         for (unsigned i = 0; i < angles.second.x.size(); i++ ) {
-            printf("sensor %d, x %d, y %d, t %d\n",
+            printf("sensor %u, x %u, y %u, t %u\n",
                    angles.first,
                    angles.second.x[i],
                    angles.second.y[i],
