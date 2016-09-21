@@ -127,8 +127,8 @@ std::tuple<int,int,int> decode_pulse(vl_lighthouse_samples S) {
 
     lighthouse_sync_pulse pulse = lookup_pulse_class(pulselen);
 
-    printf("found pulse class: duration %u skip %d sweep %d data %d\n",
-           pulse.duration, pulse.skip, pulse.sweep, pulse.data);
+    //printf("found pulse class: duration %u skip %d sweep %d data %d\n",
+    //       pulse.duration, pulse.skip, pulse.sweep, pulse.data);
 
     return {pulse.skip, pulse.sweep, pulse.data};
 }
@@ -163,7 +163,7 @@ char channel_detect(uint32_t last_pulse_time, int64_t new_pulse_time) {
         ch = 'C';
     else
         ch = 'e';
-    printf("last %u new %ld channel %c\n", last_pulse_time, new_pulse_time, ch);
+    //printf("last %u new %ld channel %c\n", last_pulse_time, new_pulse_time, ch);
     return ch;
 }
 
@@ -543,7 +543,7 @@ std::tuple<std::vector<vl_light_sample_group>, std::vector<vl_light_sample_group
                 pulse_inds.clear();
                 pulse_range = {UINT32_MAX, 0};
                 if (!isempty(pulse)) {
-                    printf("pushing pulse 1\n");
+                    //printf("pushing pulse 1\n");
                     pulses.push_back(pulse);
                 } else {
                     printf("error: sweep has begun but pulse is empty.\n");
