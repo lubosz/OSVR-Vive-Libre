@@ -21,7 +21,7 @@ typedef std::function<bool(const vive_headset_lighthouse_pulse2&)> sample_filter
 struct vl_light_sample_group {
     char channel;
     char sweep; // rotor
-    double epoch;
+    uint32_t epoch;
     int skip;
     int seq;
     vl_lighthouse_samples samples;
@@ -359,6 +359,8 @@ int find_max_seq(const std::vector<vl_light_sample_group>& sweeps) {
     for (auto g : sweeps) {
         seqs.push_back(g.seq);
     }
+    printf("we have %d sweeps\n", sweeps.size());
+    printf("we have %d seqs\n", seqs.size());
     return *std::max_element(seqs.begin(), seqs.end());
 }
 
@@ -442,8 +444,8 @@ std::map<unsigned, vl_angles> collect_readings(char station, const std::vector<v
                     R.insert(std::pair<unsigned, vl_angles>(s, vl_angles()));
 
 
-                double x_ang = ticks_sample_to_angle(xi[0], x_sweep.epoch);
-                double y_ang = ticks_sample_to_angle(yi[0], y_sweep.epoch);
+                uint32_t x_ang = ticks_sample_to_angle(xi[0], x_sweep.epoch);
+                uint32_t y_ang = ticks_sample_to_angle(yi[0], y_sweep.epoch);
 
                 R[s].x.push_back(x_ang);
                 R[s].y.push_back(y_ang);
@@ -806,13 +808,13 @@ void vl_light_classify_samples(vl_lighthouse_samples *raw_light_samples) {
 
 #include <iostream>
 
-void try_pnp(vl_lighthouse_samples *raw_light_samples, const std::map<unsigned, cv::Point3f>& config_sensor_positions) {
+std::tuple<cv::Mat, cv::Mat> try_pnp(vl_lighthouse_samples *raw_light_samples, const std::map<unsigned, cv::Point3f>& config_sensor_positions) {
     vl_lighthouse_samples sanitized_light_samples = filter_reports(*raw_light_samples, &is_sample_valid);
     std::vector<vl_light_sample_group> pulses;
     std::vector<vl_light_sample_group> sweeps;
     std::tie(sweeps, pulses) = process_lighthouse_samples(sanitized_light_samples);
     std::map<unsigned, vl_angles> R_B = collect_readings('B', sweeps);
-    std::map<unsigned, vl_angles> R_C = collect_readings('C', sweeps);
+    //std::map<unsigned, vl_angles> R_C = collect_readings('C', sweeps);
 
     cv::Mat rvec, tvec;
 
@@ -827,14 +829,42 @@ void try_pnp(vl_lighthouse_samples *raw_light_samples, const std::map<unsigned, 
     //cv::Mat distCoeffs = cv::Mat::zeros(3, 3, CV_64F);
     cv::Mat distCoeffs;
 
+    /*
+    for (int i=0; i< config_sensor_positions.size(); i++) {
+        cv::Point3f pos = config_sensor_positions.at(i);
+        printf("%d pos %f %f %f\n", i, pos.x, pos.y, pos.z);
+    }
+    */
+
     for (auto angles : R_B) {
+
+        cv::Point3f configSensor = config_sensor_positions.at(angles.first);
+
+        vl_angles a = angles.second;
+
+        cv::Point2f a_cv = cv::Point2f(angles.second.x[0]/1000, angles.second.y[0]/1000);
+/*
+        printf("%d [%f, %f] <> [%f, %f, %f]\n",
+               angles.first,
+               a_cv.x,
+               a_cv.y,
+                configSensor.x,
+                configSensor.y,
+                configSensor.z);
+*/
 
        // for (unsigned i = 0; i < angles.second.x.size(); i++ )
             foundSensors.push_back(cv::Point2f(angles.second.x[0], angles.second.y[0]));
-            configSensors.push_back(config_sensor_positions.at(angles.first));
+            configSensors.push_back(configSensor);
     }
 
-    bool ret = solvePnP(cv::Mat(configSensors), cv::Mat(foundSensors), cameraMatrix,
+    cv::Mat mat1 = cv::Mat(configSensors);
+    cv::Mat mat2 = cv::Mat(foundSensors);
+
+    if (mat1.rows > 0 && mat1.rows == mat2.rows) {
+
+
+    bool ret = solvePnP(mat1, mat2, cameraMatrix,
              distCoeffs, rvec, tvec);
 
 
@@ -842,6 +872,10 @@ void try_pnp(vl_lighthouse_samples *raw_light_samples, const std::map<unsigned, 
 
     printf("solvePnP: %d\n", ret);
 
-    std::cout << "rvec = \n "  << rvec << "\n\n";
+}
+
+    //std::cout << "rvec = \n "  << rvec << "\n\n";
     std::cout << "tvec = \n "  << tvec << "\n\n";
+
+    return {tvec, rvec};
 }
