@@ -116,18 +116,18 @@ static void dump_positions() {
     for ( unsigned index = 0; index < modelPoints.size(); ++index ) {
         // Iterates over the sequence elements.
 
-       Json::Value point = modelPoints[index];
+        Json::Value point = modelPoints[index];
 
-       //printf("%d: x %s y %s z %s\n", sensor_id, point[0].asString().c_str(), point[1].asString().c_str(), point[2].asString().c_str());
+        //printf("%d: x %s y %s z %s\n", sensor_id, point[0].asString().c_str(), point[1].asString().c_str(), point[2].asString().c_str());
 
-       cv::Point3f p = cv::Point3f(
-               (float) std::stod(point[0].asString()),
-               (float) std::stod(point[1].asString()),
-               (float) std::stod(point[2].asString()));
+        cv::Point3f p = cv::Point3f(
+                    (float) std::stod(point[0].asString()),
+                (float) std::stod(point[1].asString()),
+                (float) std::stod(point[2].asString()));
 
-       config_sensor_positions.insert(std::pair<unsigned, cv::Point3f>(sensor_id, p));
+        config_sensor_positions.insert(std::pair<unsigned, cv::Point3f>(sensor_id, p));
 
-       sensor_id++;
+        sensor_id++;
     }
 
     vl_lighthouse_samples * raw_light_samples = new vl_lighthouse_samples();
@@ -148,19 +148,13 @@ static void dump_positions() {
         while(raw_light_samples->size() < 3000)
             hid_query(driver->hmd_light_sensor_device, read_hmd_light);
 
-        //vl_light_classify_samples(raw_light_samples);
-
-        //printf("Found %d samples\n", raw_light_samples->size());
-
-        /*
-*/
         cv::Mat rvec, tvec;
 
         if (!raw_light_samples->empty())
             std::tie(tvec, rvec) = try_pnp(raw_light_samples, config_sensor_positions);
 
         raw_light_samples->clear();
-}
+    }
 }
 
 static vl_lighthouse_samples parse_csv_file(const std::string& file_path) {

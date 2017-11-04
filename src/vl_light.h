@@ -356,11 +356,13 @@ struct vl_angles {
 
 int find_max_seq(const std::vector<vl_light_sample_group>& sweeps) {
     std::vector<int> seqs;
+
+    if (sweeps.size() == 0)
+        return -1;
+
     for (auto g : sweeps) {
         seqs.push_back(g.seq);
     }
-    printf("we have %d sweeps\n", sweeps.size());
-    printf("we have %d seqs\n", seqs.size());
     return *std::max_element(seqs.begin(), seqs.end());
 }
 
@@ -396,6 +398,9 @@ std::map<unsigned, vl_angles> collect_readings(char station, const std::vector<v
 
     std::map<unsigned, vl_angles> R;
 
+    if (sweeps.size() == 0)
+        return R;
+
     int maxseq = find_max_seq(sweeps);
 
     // loop over sequences
@@ -407,7 +412,7 @@ std::map<unsigned, vl_angles> collect_readings(char station, const std::vector<v
 
         if (x_sweeps.size() < 1 || y_sweeps.size() < 1) {
             // Either or both sweeps are empty, ignore.
-            printf("Warning: Either or both sweeps are empty, ignore.\n");
+            printf("Warning: Either one or both sweeps are empty, ignore.\n");
             break;
         }
 
@@ -813,10 +818,13 @@ std::tuple<cv::Mat, cv::Mat> try_pnp(vl_lighthouse_samples *raw_light_samples, c
     std::vector<vl_light_sample_group> pulses;
     std::vector<vl_light_sample_group> sweeps;
     std::tie(sweeps, pulses) = process_lighthouse_samples(sanitized_light_samples);
-    std::map<unsigned, vl_angles> R_B = collect_readings('B', sweeps);
+    std::map<unsigned, vl_angles> R_B = collect_readings('A', sweeps);
     //std::map<unsigned, vl_angles> R_C = collect_readings('C', sweeps);
 
     cv::Mat rvec, tvec;
+
+    if (R_B.size() == 0)
+        return {tvec, rvec};
 
     //bool useExtrinsicGuess=false;
     //int flags=ITERATIVE;

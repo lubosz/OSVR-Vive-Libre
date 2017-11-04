@@ -7,8 +7,8 @@ from Cython.Distutils import build_ext
 module1 = Extension("pyvive", 
     ["pyvive.pyx", "vl_python.cpp"],
     language="c++",
-    libraries=["vive_libre"],
-    include_dirs=['../src'])
+    libraries=["vive-libre", "hidapi-libusb"],
+    include_dirs=['../src', '/usr/include/hidapi/', '/usr/include/eigen3/'])
  
 setup(name = 'pyive',
     version = '1.0',
