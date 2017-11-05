@@ -12,38 +12,37 @@
 
 vl_driver* driver;
 
+bool quit = false;
+
 static bool compare(const std::string& str1, const std::string& str2) {
     return str1.compare(str2) == 0;
 }
 
 static void dump_controller() {
-    while(true)
-        vl_driver_log_watchman(driver->watchman_dongle_device);
+    while(!quit)
+        driver->log_watchman(driver->watchman_dongle_device);
 }
 
 static void dump_hmd_imu() {
-    while(true)
-        vl_driver_log_hmd_imu(driver->hmd_imu_device);
+    while(!quit)
+        driver->log_hmd_imu(driver->hmd_imu_device);
 }
 
 static void dump_hmd_imu_pose() {
-    while(true)
+    while(!quit)
         driver->update_pose();
-}
-
-static void send_hmd_on() {
-    // turn the display on
-    int hret = hid_send_feature_report(driver->hmd_device,
-                                   vive_magic_power_on,
-                                   sizeof(vive_magic_power_on));
-    printf("power on magic: %d\n", hret);
 }
 
 static void dump_hmd_light() {
     // hmd needs to be on to receive light reports.
-    send_hmd_on();
-    while(true)
-        vl_driver_log_hmd_light(driver->hmd_light_sensor_device);
+    driver->send_hmd_on();
+    driver->send_enable_lighthouse();
+    while(!quit)
+        driver->log_hmd_light(driver->hmd_light_sensor_device);
+    printf("bye! closing display\n");
+    driver->send_hmd_off();
+    printf("closed display.\n");
+    
 }
 
 static void dump_config_hmd() {
@@ -51,10 +50,8 @@ static void dump_config_hmd() {
     printf("hmd_imu_device config: %s\n", config);
 }
 
-
-
 static void dump_station_angle() {
-    send_hmd_on();
+    driver->send_hmd_on();
 
     vl_lighthouse_samples * raw_light_samples = new vl_lighthouse_samples();
 
@@ -77,8 +74,8 @@ static void dump_station_angle() {
 }
 
 
-static void dump_positions() {
-    send_hmd_on();
+void dump_positions() {
+    driver->send_hmd_on();
 
 
     std::string config(vl_get_config(driver->hmd_imu_device));
@@ -239,7 +236,6 @@ static void pnp_from_csv(const std::string& file_path) {
 
     unsigned sensor_id = 0;
 
-
     std::map<unsigned, cv::Point3f> config_sensor_positions;
 
     for ( unsigned index = 0; index < modelPoints.size(); ++index ) {
@@ -259,27 +255,12 @@ static void pnp_from_csv(const std::string& file_path) {
        sensor_id++;
     }
 
-
-
     vl_lighthouse_samples samples = parse_csv_file(file_path);
 
     printf("Found %d samples\n", samples.size());
 
     if (!samples.empty())
         try_pnp(&samples, config_sensor_positions);
-}
-
-static void send_hmd_off() {
-    // turn the display off
-    int hret = hid_send_feature_report(driver->hmd_device,
-                                   vive_magic_power_off1,
-                                   sizeof(vive_magic_power_off1));
-    printf("power off magic 1: %d\n", hret);
-
-    hret = hid_send_feature_report(driver->hmd_device,
-                                   vive_magic_power_off2,
-                                   sizeof(vive_magic_power_off2));
-    printf("power off magic 2: %d\n", hret);
 }
 
 static void send_controller_off() {
@@ -289,9 +270,7 @@ static void send_controller_off() {
 }
 
 static void signal_interrupt_handler(int sig) {
-    signal(sig, SIG_IGN);
-    delete(driver);
-    exit(0);
+    quit = true;
 }
 
 typedef std::function<void(void)> taskfun;
@@ -315,6 +294,15 @@ static std::map<std::string, taskfun> dump_commands {
     { "hmd-imu-pose", dump_hmd_imu_pose },
     { "lighthouse-angles", dump_station_angle }
 };
+
+
+static void send_hmd_on() {
+  driver->send_hmd_on();
+}
+
+static void send_hmd_off() {
+  driver->send_hmd_off();
+}
 
 static std::map<std::string, taskfun> send_commands {
     { "hmd-on", send_hmd_on },

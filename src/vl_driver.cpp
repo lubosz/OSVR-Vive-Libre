@@ -42,12 +42,15 @@ vl_driver::vl_driver() {
 }
 
 vl_driver::~vl_driver() {
+    std::lock_guard<std::mutex> guard(mutex_hmd_device);
+
     delete(sensor_fusion);
     hid_close(hmd_device);
     hid_close(hmd_imu_device);
     hid_close(watchman_dongle_device);
     hid_close(hmd_light_sensor_device);
     hid_exit();
+    printf("VL Driver closed.\n");
 }
 
 bool vl_driver::init_devices(unsigned index) {
@@ -176,9 +179,6 @@ bool vl_driver::open_devices(int idx)
     if(!watchman_dongle_device)
         return false;
 
-    //hret = hid_send_feature_report(drv->hmd_device, vive_magic_enable_lighthouse, sizeof(vive_magic_enable_lighthouse));
-    //printf("enable lighthouse magic: %d\n", hret);
-
     sensor_fusion = new vl_fusion();
 
     return true;
@@ -250,16 +250,18 @@ void _log_hmd_light(unsigned char *buffer, int size) {
     }
 }
 
-void vl_driver_log_watchman(hid_device *dev) {
+void vl_driver::log_watchman(hid_device *dev) {
     hid_query(dev, &_log_watchman);
 }
 
-void vl_driver_log_hmd_imu(hid_device* dev) {
+void vl_driver::log_hmd_imu(hid_device* dev) {
     hid_query(dev, &_log_hmd_imu);
 }
 
-void vl_driver_log_hmd_light(hid_device* dev) {
+void vl_driver::log_hmd_light(hid_device* dev) {
+    mutex_hmd_device.lock();
     hid_query(dev, &_log_hmd_light);
+    mutex_hmd_device.unlock();
 }
 
 static bool is_timestamp_valid(uint32_t t1, uint32_t t2) {
@@ -312,4 +314,31 @@ void vl_driver::update_pose() {
         }
     };
     hid_query(hmd_imu_device, update_pose_fun);
+}
+
+
+void vl_driver::send_hmd_on() {
+    // turn the display on
+    int hret = hid_send_feature_report(hmd_device,
+                                   vive_magic_power_on,
+                                   sizeof(vive_magic_power_on));
+    printf("power on magic: %d\n", hret);
+}
+
+void vl_driver::send_hmd_off() {
+    // turn the display off
+    int hret = hid_send_feature_report(hmd_device,
+                                   vive_magic_power_off1,
+                                   sizeof(vive_magic_power_off1));
+    printf("power off magic 1: %d\n", hret);
+
+    hret = hid_send_feature_report(hmd_device,
+                                   vive_magic_power_off2,
+                                   sizeof(vive_magic_power_off2));
+    printf("power off magic 2: %d\n", hret);
+}
+
+void vl_driver::send_enable_lighthouse() {
+    int hret = hid_send_feature_report(hmd_device, vive_magic_enable_lighthouse, sizeof(vive_magic_enable_lighthouse));
+    printf("enable lighthouse magic: %d\n", hret);
 }

@@ -40,9 +40,9 @@ include_directories(${EIGEN3_INCLUDE_DIR} ${HIDAPI_INCLUDE_DIRS} src)
 message("found JsonCpp_LIBRARIES libs: ${JSONCPP_LIBRARIES}")
 
 # Build the plugin
-osvr_convert_json(org_osvr_Vive_Libre_json
-    config/org_osvr_Vive_Libre.json
-    "${CMAKE_CURRENT_BINARY_DIR}/org_osvr_Vive_Libre_json.h")
+#osvr_convert_json(org_osvr_Vive_Libre_json
+#    config/org_osvr_Vive_Libre.json
+#    "${CMAKE_CURRENT_BINARY_DIR}/org_osvr_Vive_Libre_json.h")
 
 set(SOURCES
     src/hidraw.h
@@ -64,28 +64,28 @@ target_link_libraries(vive-libre
     ${JSONCPP_LIBRARIES}
     ${OpenCV_LIBRARIES})
 
-set(OSVR_PLUGIN_SOURCES
-    src/org_osvr_Vive_Libre.cpp
-    ${SOURCES}
-    "${CMAKE_CURRENT_BINARY_DIR}/org_osvr_Vive_Libre_json.h")
+#set(OSVR_PLUGIN_SOURCES
+#    src/org_osvr_Vive_Libre.cpp
+#    ${SOURCES}
+#    "${CMAKE_CURRENT_BINARY_DIR}/org_osvr_Vive_Libre_json.h")
 
-osvr_add_plugin(org_osvr_Vive_Libre ${OSVR_PLUGIN_SOURCES})
+#osvr_add_plugin(org_osvr_Vive_Libre ${OSVR_PLUGIN_SOURCES})
 
-target_link_libraries(org_osvr_Vive_Libre
-    osvrPluginKit
-    osvrCommon
-    osvrUtil
-    ${HIDAPI_LIBRARIES}
-    ${ZLIB_LIBRARIES})
+#target_link_libraries(org_osvr_Vive_Libre
+#    osvrPluginKit
+#    osvrCommon
+#    osvrUtil
+#    ${HIDAPI_LIBRARIES}
+#    ${ZLIB_LIBRARIES})
 
 # Install files for the plugin.
-install(
-    FILES
-    config/osvr_server_config.vive_libre.sample.json config/HTC_Vive_meshdata.json
-    DESTINATION
-    ${CMAKE_INSTALL_DATAROOTDIR}/osvrcore/sample-configs)
-
-install(TARGETS vive-libre DESTINATION ${CMAKE_INSTALL_LIBDIR})
+#install(
+#    FILES
+#    config/osvr_server_config.vive_libre.sample.json config/HTC_Vive_meshdata.json
+#    DESTINATION
+#    ${CMAKE_INSTALL_DATAROOTDIR}/osvrcore/sample-configs)#
+#
+#install(TARGETS vive-libre DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 # Build tool
 add_executable(vivectl tools/vivectl.cpp)

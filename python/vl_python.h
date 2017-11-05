@@ -9,4 +9,5 @@ class ViveLibre {
   ~ViveLibre();
   void connect();
   std::map<int, std::vector<float>> pollAngles();
+  std::string get_config();
 };

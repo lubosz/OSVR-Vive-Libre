@@ -40,6 +40,11 @@ void ViveLibre::connect() {
     signal(SIGINT, signal_interrupt_handler);
 }
 
+std::string ViveLibre::get_config() {
+  char * config = vl_get_config(driver->hmd_imu_device);
+  return std::string(config);
+}
+
 std::map<int, std::vector<float>> ViveLibre::pollAngles() {
 
     vl_lighthouse_samples * raw_light_samples = new vl_lighthouse_samples();

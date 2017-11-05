@@ -44,7 +44,11 @@
 
 #define FREQ_48MHZ 1.0f / 48000000.0f
 
+
 class vl_driver {
+
+    std::mutex mutex_hmd_device;
+
     public:
     hid_device* hmd_device;
     hid_device* hmd_imu_device;
@@ -61,6 +65,14 @@ class vl_driver {
     void update_pose();
 
     void _update_pose(const vive_headset_imu_report &pkt);
+    
+    void log_watchman(hid_device *dev);
+    void log_hmd_light(hid_device *dev);
+    void log_hmd_imu(hid_device* dev);
+    
+    void send_hmd_on();
+    void send_hmd_off();
+    void send_enable_lighthouse();
 };
 
 typedef std::function<void(unsigned char*,int)> query_fun;
@@ -76,7 +88,3 @@ static inline void hid_query(hid_device* dev, query_fun fun) {
     if(size < 0)
         printf("error reading from device\n");
 }
-
-void vl_driver_log_watchman(hid_device *dev);
-void vl_driver_log_hmd_light(hid_device *dev);
-void vl_driver_log_hmd_imu(hid_device* dev);
