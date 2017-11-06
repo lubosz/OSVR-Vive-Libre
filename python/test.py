@@ -9,6 +9,18 @@ import matplotlib.cm as cmx
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 import numpy as np
+from mpl_toolkits.mplot3d import Axes3D
+import time
+
+# The J axis (horizontal) sweep starts 71111 ticks after the sync
+# pulse start (32°) and ends at 346667 ticks (156°).
+# The K axis (vertical) sweep starts at 55555 ticks (23°) (25?) and ends
+# at 331111 ticks (149°).
+
+ticks_per_degree = 2222.22
+
+angle_range_h = (32, 156)
+angle_range_v = (25, 149)
 
 
 class SigHandler:
@@ -72,30 +84,26 @@ class VivePos:
 
         handler = SigHandler()
 
-        # The J axis (horizontal) sweep starts 71111 ticks after the sync
-        # pulse start (32°) and ends at 346667 ticks (156°).
-        # The K axis (vertical) sweep starts at 55555 ticks (23°) (25?) and ends
-        # at 331111 ticks (149°).
-
         while not handler.quit:
             plt.clf()
 
             angles = self.vive.pollAngles()
             # plt.axis([149, 25, 32, 156])
-            plt.axis([0, 149-25, 0, 156-32])
+            plt.axis([0, angle_range_v[1] - angle_range_v[0],
+                      0, angle_range_h[1] - angle_range_h[0]])
             # plt.axis([-0.14, 4.4, 0.66, -1.9])
 
             # plt.axis([-50, 50, -50, 50])
 
             for i, a in angles.items():
-                x_rad = (149 - 25) - ((a[0] / 2222.22) - 25)
-                y_rad = (a[1] / 2222.22) - 32
+                x = (angle_range_v[1] - angle_range_v[0]) - ((a[0] / ticks_per_degree) - angle_range_v[0])
+                y = (a[1] / ticks_per_degree) - angle_range_h[0]
 
-                plt.scatter(x_rad, y_rad, color=self.scalarMap.to_rgba(i))
+                plt.scatter(x, y, color=self.scalarMap.to_rgba(i))
 
             plt.pause(0.05)
 
-    def plot_actual_pnp(self):
+    def plot_pnp(self):
         config_str = self.vive.get_config().decode()
 
         points, normals = self.get_light_sensor_positions(config_str)
@@ -153,14 +161,13 @@ class VivePos:
                 # image_points.append([a[0]/2222.22, a[1]/2222.22])
                 j += 1
 
-                x_rad = (a[0]/2222.22)-25
-                y_rad = (a[1]/2222.22)-32
+                image_point = [(a[0] / ticks_per_degree) - 25,
+                               (a[1] / ticks_per_degree) - 32]
+                image_points.append(image_point)
 
-                vec2d = [x_rad, y_rad]
-
-                image_points.append(vec2d)
-
-                fixed_points = [points[i][0], -points[i][2], points[i][1]]
+                fixed_points = [points[i][0],
+                                -points[i][2],
+                                points[i][1]]
                 object_points.append(fixed_points)
                 # vec3d = np.array(points[i]).reshape((3,1))
                 # object_points.append(points[i])
@@ -191,8 +198,5 @@ if __name__ == '__main__':
     vive_pos = VivePos()
 
     # vive_pos.plot_config()
-    vive_pos.plot_actual_pnp()
+    vive_pos.plot_pnp()
     # vive_pos.plot_angles()
-
-    print("Goodbye!")
-
