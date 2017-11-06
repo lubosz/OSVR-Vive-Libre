@@ -123,8 +123,8 @@ class VivePos:
         # print("cameraMatrix", cameraMatrix)
 
         fx = 0.5
-        w = 149-25
-        h = 156-32
+        w = angle_range_v[1] - angle_range_v[0]
+        h = angle_range_h[1] - angle_range_h[0]
 
         camera_matrix = np.float64([[fx * w, 0.0,    0.5*(w-1)],
                                     [0.0,    fx * w, 0.5*(h-1)],
@@ -146,34 +146,17 @@ class VivePos:
             object_points = []
             image_points = []
 
-            ax.set_xlim3d(-2.5, 2.5)
-            ax.set_ylim3d(-2.5, 2.5)
-            ax.set_zlim3d(-2.5, 2.5)
-
-            max_samples = 40
-            j = 0
+            ax.set_xlim3d(-0.75, 0.75)
+            ax.set_zlim3d(-0.75, 0.75)
+            ax.set_ylim3d(-2.5, -1.0)
 
             angles = self.vive.pollAngles()
-            # plt.axis([100000, 300000, 100000, 300000])
+
             for i, a in angles.items():
-                # plt.scatter(a[0], a[1], color=self.scalarMap.to_rgba(i))
-                # image_points.append(a)
-                # image_points.append([a[0]/2222.22, a[1]/2222.22])
-                j += 1
-
-                image_point = [(a[0] / ticks_per_degree) - 25,
-                               (a[1] / ticks_per_degree) - 32]
+                image_point = [(a[0] / ticks_per_degree) - angle_range_v[0],
+                               (a[1] / ticks_per_degree) - angle_range_h[0]]
                 image_points.append(image_point)
-
-                fixed_points = [points[i][0],
-                                -points[i][2],
-                                points[i][1]]
-                object_points.append(fixed_points)
-                # vec3d = np.array(points[i]).reshape((3,1))
-                # object_points.append(points[i])
-
-                if j >= max_samples:
-                    break
+                object_points.append(points[i])
 
             image_points_np = np.array(image_points)
             object_points_np = np.array(object_points)
@@ -181,17 +164,19 @@ class VivePos:
             print("we have %d image points and %d object points" % (len(image_points), len(object_points)))
 
             if len(object_points_np) > 3 and len(image_points) == len(object_points):
-                print("image points", image_points_np)
-                print("object points", object_points_np)
+                # print("image points", image_points_np)
+                # print("object points", object_points_np)
 
                 # retval, rvec, tvec = cv2.solvePnP(object_points_np, image_points_np, cameraMatrix, distCoeffs)
-                retval, rvec, tvec, inliers = cv2.solvePnPRansac(object_points_np, image_points_np, camera_matrix,
-                                                                 dist_coeffs, useExtrinsicGuess=False)
+                ret, rvec, tvec, inliers = cv2.solvePnPRansac(object_points_np, image_points_np, camera_matrix,
+                                                                 dist_coeffs)
 
-                print("RET", retval, "tvec", tvec, "rvec", rvec)
-
-                if retval:
-                    ax.scatter(tvec[0], tvec[1], tvec[2], depthshade=False)
+                if ret:
+                    print("tvec\n", tvec)
+                    print("rvec\n", rvec)
+                    ax.scatter(tvec[0], -tvec[2], tvec[1], depthshade=False)
+                else:
+                    print("No correspondences found!")
             plt.pause(0.05)
 
 if __name__ == '__main__':
