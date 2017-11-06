@@ -142,10 +142,12 @@ class VivePos:
         ax = f.add_subplot(1, 1, 1, aspect=1, projection='3d')
 
         scat = ax.scatter(0, 0, 0)
+        quiver = ax.quiver(0, 0, 0, 0, 0, 0)
 
         while not handler.quit:
             # plt.clf()
             scat.remove()
+            quiver.remove()
 
             object_points = []
             image_points = []
@@ -178,6 +180,11 @@ class VivePos:
                     print("tvec\n", tvec)
                     print("rvec\n", rvec)
                     scat = ax.scatter(tvec[0], -tvec[2], tvec[1], color="blue")
+
+                    quiver = ax.quiver(tvec[0], -tvec[2], tvec[1],
+                                       rvec[0], -rvec[2], rvec[1],
+                                       pivot='tail', length=0.1)
+
                 else:
                     print("No correspondences found!")
             plt.draw()
