@@ -142,12 +142,19 @@ class VivePos:
 
         f = plt.figure()
 
+        f.text(0.5, 0.04, 'vive-libre Lighthouse Tracking', ha='center', va='center')
+
         pnp_ax = f.add_subplot(1, 3, 1, aspect=1, projection='3d')
+
+        pnp_ax.set_title('OpenCV solvePnPRansac')
+
         angles_ax = f.add_subplot(1, 3, 2, aspect=1)
+
 
         # draw config
 
         config_ax = f.add_subplot(1, 3, 3, aspect=1, projection='3d')
+        config_ax.set_title('JSON Config')
 
         config_vectors = []
         for i in range(0, 32):
@@ -172,8 +179,12 @@ class VivePos:
 
         while not handler.quit:
             # draw pnp
-            scat.remove()
-            quiver.remove()
+
+            try:
+                scat.remove()
+                quiver.remove()
+            except ValueError:
+                pass
 
             object_points = []
             image_points = []
@@ -216,13 +227,14 @@ class VivePos:
 
             # draw angles
             angles_ax.cla()
-            angles_ax.axis([0, angle_range_v[1] - angle_range_v[0],
-                            0, angle_range_h[1] - angle_range_h[0]])
+            angles_ax.set_title('Station View Angles (Degrees)')
+            angles_ax.axis([40, (angle_range_v[1] - angle_range_v[0]) - 40,
+                            40, (angle_range_h[1] - angle_range_h[0]) - 40])
             for i, a in angles.items():
                 x = (angle_range_v[1] - angle_range_v[0]) - ((a[0] / ticks_per_degree) - angle_range_v[0])
                 y = (a[1] / ticks_per_degree) - angle_range_h[0]
 
-                angles_ax.scatter(x, y, color=self.scalarMap.to_rgba(i))
+                angles_ax.scatter(x, y, color=self.scalarMap.to_rgba(i), s=2.0)
 
             plt.draw()
             plt.pause(0.05)
