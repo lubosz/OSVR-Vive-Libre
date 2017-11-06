@@ -57,7 +57,7 @@ class VivePos:
 
         points, normals = self.get_light_sensor_positions(config_str)
 
-        ax = f.add_subplot(1, 1, 1, aspect=1, projection='3d')
+        config_ax = f.add_subplot(1, 1, 1, aspect=1, projection='3d')
 
         for i in range(0, 32):
             v = [points[i][0], -points[i][2], points[i][1],
@@ -65,33 +65,35 @@ class VivePos:
             vectors.append(v)
         i = 0
         for p in points:
-            ax.scatter(p[0], -p[2], p[1], color=self.scalarMap.to_rgba(i))
+            config_ax.scatter(p[0], -p[2], p[1], color=self.scalarMap.to_rgba(i))
             i += 1
 
         soa = np.array(vectors)
         x, y, z, u, v, w = zip(*soa)
-        ax.quiver(x, y, z, u, v, w, pivot='tail', length=0.1)
+        config_ax.quiver(x, y, z, u, v, w, pivot='tail', length=0.1)
 
-        ax.set_xlim3d(-0.2, 0.2)
-        ax.set_ylim3d(-0.2, 0.2)
-        ax.set_zlim3d(-0.2, 0.2)
+        config_ax.set_xlim3d(-0.2, 0.2)
+        config_ax.set_ylim3d(-0.2, 0.2)
+        config_ax.set_zlim3d(-0.2, 0.2)
 
         plt.show()
 
     def plot_angles(self):
-        # ax = f.add_subplot(2,2,2, aspect=1)
+        f = plt.figure()
+        angles_ax = f.add_subplot(1, 1, 1, aspect=1)
 
-        plt.ion()
+        matplotlib.interactive(True)
 
         handler = SigHandler()
 
         while not handler.quit:
-            plt.clf()
+            angles_ax.cla()
+            angles_ax.axis([0, angle_range_v[1] - angle_range_v[0],
+                            0, angle_range_h[1] - angle_range_h[0]])
 
             angles = self.vive.pollAngles()
             # plt.axis([149, 25, 32, 156])
-            plt.axis([0, angle_range_v[1] - angle_range_v[0],
-                      0, angle_range_h[1] - angle_range_h[0]])
+
             # plt.axis([-0.14, 4.4, 0.66, -1.9])
 
             # plt.axis([-50, 50, -50, 50])
@@ -100,8 +102,9 @@ class VivePos:
                 x = (angle_range_v[1] - angle_range_v[0]) - ((a[0] / ticks_per_degree) - angle_range_v[0])
                 y = (a[1] / ticks_per_degree) - angle_range_h[0]
 
-                plt.scatter(x, y, color=self.scalarMap.to_rgba(i))
+                angles_ax.scatter(x, y, color=self.scalarMap.to_rgba(i))
 
+            plt.draw()
             plt.pause(0.05)
 
     def plot_pnp(self):
@@ -139,22 +142,45 @@ class VivePos:
 
         f = plt.figure()
 
-        ax = f.add_subplot(1, 1, 1, aspect=1, projection='3d')
+        pnp_ax = f.add_subplot(1, 3, 1, aspect=1, projection='3d')
+        angles_ax = f.add_subplot(1, 3, 2, aspect=1)
 
-        scat = ax.scatter(0, 0, 0)
-        quiver = ax.quiver(0, 0, 0, 0, 0, 0)
+        # draw config
+
+        config_ax = f.add_subplot(1, 3, 3, aspect=1, projection='3d')
+
+        config_vectors = []
+        for i in range(0, 32):
+            v = [points[i][0], -points[i][2], points[i][1],
+                 normals[i][0], -normals[i][2], normals[i][1]]
+            config_vectors.append(v)
+        i = 0
+        for p in points:
+            config_ax.scatter(p[0], -p[2], p[1], color=self.scalarMap.to_rgba(i))
+            i += 1
+
+        soa = np.array(config_vectors)
+        x, y, z, u, v, w = zip(*soa)
+        config_ax.quiver(x, y, z, u, v, w, pivot='tail', length=0.1)
+
+        config_ax.set_xlim3d(-0.2, 0.2)
+        config_ax.set_ylim3d(-0.2, 0.2)
+        config_ax.set_zlim3d(-0.2, 0.2)
+
+        scat = pnp_ax.scatter(0, 0, 0)
+        quiver = pnp_ax.quiver(0, 0, 0, 0, 0, 0)
 
         while not handler.quit:
-            # plt.clf()
+            # draw pnp
             scat.remove()
             quiver.remove()
 
             object_points = []
             image_points = []
 
-            ax.set_xlim3d(-0.75, 0.75)
-            ax.set_zlim3d(-0.75, 0.75)
-            ax.set_ylim3d(-2.5, -1.0)
+            pnp_ax.set_xlim3d(-0.75, 0.75)
+            pnp_ax.set_zlim3d(-0.75, 0.75)
+            pnp_ax.set_ylim3d(-2.5, -1.0)
 
             angles = self.vive.pollAngles()
 
@@ -179,20 +205,32 @@ class VivePos:
                 if ret:
                     print("tvec\n", tvec)
                     print("rvec\n", rvec)
-                    scat = ax.scatter(tvec[0], -tvec[2], tvec[1], color="blue")
+                    scat = pnp_ax.scatter(tvec[0], -tvec[2], tvec[1], color="blue")
 
-                    quiver = ax.quiver(tvec[0], -tvec[2], tvec[1],
+                    quiver = pnp_ax.quiver(tvec[0], -tvec[2], tvec[1],
                                        rvec[0], -rvec[2], rvec[1],
                                        pivot='tail', length=0.1)
 
                 else:
                     print("No correspondences found!")
+
+            # draw angles
+            angles_ax.cla()
+            angles_ax.axis([0, angle_range_v[1] - angle_range_v[0],
+                            0, angle_range_h[1] - angle_range_h[0]])
+            for i, a in angles.items():
+                x = (angle_range_v[1] - angle_range_v[0]) - ((a[0] / ticks_per_degree) - angle_range_v[0])
+                y = (a[1] / ticks_per_degree) - angle_range_h[0]
+
+                angles_ax.scatter(x, y, color=self.scalarMap.to_rgba(i))
+
             plt.draw()
             plt.pause(0.05)
 
 if __name__ == '__main__':
     vive_pos = VivePos()
 
-    # vive_pos.plot_config()
+    #vive_pos.plot_config()
+
     vive_pos.plot_pnp()
-    # vive_pos.plot_angles()
+    #vive_pos.plot_angles()
