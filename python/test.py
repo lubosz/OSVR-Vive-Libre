@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 import time
+import matplotlib
 
 # The J axis (horizontal) sweep starts 71111 ticks after the sync
 # pulse start (32°) and ends at 346667 ticks (156°).
@@ -126,13 +127,13 @@ class VivePos:
         w = angle_range_v[1] - angle_range_v[0]
         h = angle_range_h[1] - angle_range_h[0]
 
-        camera_matrix = np.float64([[fx * w, 0.0,    0.5*(w-1)],
-                                    [0.0,    fx * w, 0.5*(h-1)],
+        camera_matrix = np.float64([[fx * w, 0.0,    0.5 * (w - 1)],
+                                    [0.0,    fx * w, 0.5 * (h - 1)],
                                     [0.0,    0.0,    1.0]])
 
         dist_coeffs = np.zeros(4)
 
-        plt.ion()
+        matplotlib.interactive(True)
 
         handler = SigHandler()
 
@@ -140,8 +141,11 @@ class VivePos:
 
         ax = f.add_subplot(1, 1, 1, aspect=1, projection='3d')
 
+        scat = ax.scatter(0, 0, 0)
+
         while not handler.quit:
             # plt.clf()
+            scat.remove()
 
             object_points = []
             image_points = []
@@ -168,15 +172,15 @@ class VivePos:
                 # print("object points", object_points_np)
 
                 # retval, rvec, tvec = cv2.solvePnP(object_points_np, image_points_np, cameraMatrix, distCoeffs)
-                ret, rvec, tvec, inliers = cv2.solvePnPRansac(object_points_np, image_points_np, camera_matrix,
-                                                                 dist_coeffs)
-
+                ret, rvec, tvec, inliers = cv2.solvePnPRansac(object_points_np, image_points_np,
+                                                              camera_matrix, dist_coeffs)
                 if ret:
                     print("tvec\n", tvec)
                     print("rvec\n", rvec)
-                    ax.scatter(tvec[0], -tvec[2], tvec[1], depthshade=False)
+                    scat = ax.scatter(tvec[0], -tvec[2], tvec[1], color="blue")
                 else:
                     print("No correspondences found!")
+            plt.draw()
             plt.pause(0.05)
 
 if __name__ == '__main__':
